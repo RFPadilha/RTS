@@ -25,7 +25,7 @@ public class UIManager : MonoBehaviour
     private Transform _infoPanelResourcesCostParent;
     public Color invalidTextColor;
 
-    //UI element that displays selected units
+    //UI element that displays selected unit name, level, production, actions, etc...
     public Transform selectedUnitsListParent;
     public GameObject selectedUnitDisplayPrefab;
     public Transform selectionGroupsParent;
@@ -36,6 +36,11 @@ public class UIManager : MonoBehaviour
     private Text _selectedUnitLevelText;
     private Transform _selectedUnitResourcesProductionParent;
     private Transform _selectedUnitActionButtonsParent;
+    private Unit _selectedUnit;
+    public GameObject unitSkillButtonPrefab;
+
+    //UI element that displays pause menu
+    public GameObject gameSettingsPanel;
 
     private void Awake()
     {
@@ -65,7 +70,7 @@ public class UIManager : MonoBehaviour
         {
             GameObject display = Instantiate(gameResourceDisplayPrefab, resourcesUIParent);
             display.name = pair.Key;
-            display.GetComponentInChildren<Image>().sprite = Resources.Load<Sprite>($"Textures/GameResources/{display.name}"); ;
+            display.transform.Find("Icon").GetComponent<Image>().sprite = Resources.Load<Sprite>($"Textures/GameResources/{display.name}");
             _resourceTexts[pair.Key] = display.transform.Find("Text").GetComponent<Text>();
             _SetResourceText(pair.Key, pair.Value.Amount);
         }
@@ -94,9 +99,15 @@ public class UIManager : MonoBehaviour
         _selectedUnitActionButtonsParent = selectedUnitMenuTransform.Find("Buttons/SpecificActions");
 
         _ShowSelectedUnitMenu(false);
+        gameSettingsPanel.SetActive(false);
     }
 
-
+    public void ToggleGameSettingsPanel()
+    {
+        bool showGameSettingsPanel = !gameSettingsPanel.activeSelf;
+        gameSettingsPanel.SetActive(showGameSettingsPanel);
+        EventManager.TriggerEvent(showGameSettingsPanel ? "PauseGame" : "ResumeGame");
+    }
     //activates element when control group is defined
     public void ToggleSelectionGroupButton(int groupIndex, bool on)
     {
@@ -130,33 +141,35 @@ public class UIManager : MonoBehaviour
     {
         EventManager.AddListener("UpdateResourceTexts", _OnUpdateResourceTexts);
         EventManager.AddListener("CheckBuildingButtons", _OnCheckBuildingButtons);
-        EventManager.AddTypedListener("HoverBuildingButton", _OnHoverBuildingButton);
+        EventManager.AddListener("HoverBuildingButton", _OnHoverBuildingButton);
         EventManager.AddListener("UnhoverBuildingButton", _OnUnhoverBuildingButton);
-        EventManager.AddTypedListener("SelectUnit", _OnSelectUnit);
-        EventManager.AddTypedListener("DeselectUnit", _OnDeselectUnit);
+        EventManager.AddListener("SelectUnit", _OnSelectUnit);
+        EventManager.AddListener("DeselectUnit", _OnDeselectUnit);
     }
 
     private void OnDisable()
     {
         EventManager.RemoveListener("UpdateResourceTexts", _OnUpdateResourceTexts);
         EventManager.RemoveListener("CheckBuildingButtons", _OnCheckBuildingButtons);
-        EventManager.RemoveTypedListener("HoverBuildingButton", _OnHoverBuildingButton);
+        EventManager.RemoveListener("HoverBuildingButton", _OnHoverBuildingButton);
         EventManager.RemoveListener("UnhoverBuildingButton", _OnUnhoverBuildingButton);
-        EventManager.RemoveTypedListener("SelectUnit", _OnSelectUnit);
-        EventManager.RemoveTypedListener("DeselectUnit", _OnDeselectUnit);
+        EventManager.RemoveListener("SelectUnit", _OnSelectUnit);
+        EventManager.RemoveListener("DeselectUnit", _OnDeselectUnit);
     }
 
-    private void _OnSelectUnit(CustomEventData data)
+    private void _OnSelectUnit(object data)
     {
-        _AddSelectedUnitToUIList(data.unit);
-        _SetSelectedUnitMenu(data.unit);
+        Unit unit = (Unit)data;
+        _AddSelectedUnitToUIList(unit);
+        _SetSelectedUnitMenu(unit);
         _ShowSelectedUnitMenu(true);
 
     }
 
-    private void _OnDeselectUnit(CustomEventData data)
+    private void _OnDeselectUnit(object data)
     {
-        _RemoveSelectedUnitFromUIList(data.unit.Code);
+        Unit unit = (Unit)data;
+        _RemoveSelectedUnitFromUIList(unit.Code);
         if (Globals.SELECTED_UNITS.Count == 0)
             _ShowSelectedUnitMenu(false);
         else
@@ -165,6 +178,7 @@ public class UIManager : MonoBehaviour
 
     private void _SetSelectedUnitMenu(Unit unit)
     {
+        _selectedUnit = unit;
         // adapt content panel heights to match info to display
         int contentHeight = 60 + unit.Production.Count * 16;
         _selectedUnitContentRectTransform.sizeDelta = new Vector2(64, contentHeight);
@@ -174,24 +188,67 @@ public class UIManager : MonoBehaviour
         _selectedUnitTitleText.text = unit.Data.unitName;
         _selectedUnitLevelText.text = $"Level {unit.Level}";
         // clear resource production and reinstantiate new one
-        if (_selectedUnitResourcesProductionParent.transform.childCount > 0)
+        foreach (Transform child in _selectedUnitResourcesProductionParent) Destroy(child.gameObject);
+        foreach (Transform child in _selectedUnitActionButtonsParent) Destroy(child.gameObject);
+
+        if (unit.SkillManagers.Count > 0)
         {
-            foreach (Transform child in _selectedUnitResourcesProductionParent)
-                Destroy(child.gameObject);
+            GameObject g; Transform t; Button b;
+            for (int i = 0; i < unit.SkillManagers.Count; i++)
+            {
+                g = GameObject.Instantiate(
+                    unitSkillButtonPrefab, _selectedUnitActionButtonsParent);
+                t = g.transform;
+                b = g.GetComponent<Button>();
+                unit.SkillManagers[i].SetButton(b);
+                t.Find("Text").GetComponent<Text>().text =
+                    unit.SkillManagers[i].skill.skillName;
+                _AddUnitSkillButtonListener(b, i);
+            }
         }
         if (unit.Production.Count > 0)
         {
-            GameObject g; 
+            GameObject g;
             Transform t;
             foreach (ResourceValue resource in unit.Production)
             {
-                g = GameObject.Instantiate(
-                    gameResourceCostPrefab, _selectedUnitResourcesProductionParent);
+                g = GameObject.Instantiate(gameResourceCostPrefab, _selectedUnitResourcesProductionParent);
                 t = g.transform;
                 t.Find("Text").GetComponent<Text>().text = $"+{resource.amount}";
                 t.Find("Icon").GetComponent<Image>().sprite = Resources.Load<Sprite>($"Textures/GameResources/{resource.code}");
+                
+            }
+
+        }
+
+        //--------------------------------------------------------
+        _selectedUnit = unit;
+        // clear skills and reinstantiate new ones
+        if (_selectedUnitActionButtonsParent.childCount > 0)
+        {
+            foreach (Transform child in _selectedUnitActionButtonsParent)
+                Destroy(child.gameObject);
+        }
+        if (unit.SkillManagers.Count > 0)
+        {
+            GameObject g;
+            Transform t;
+            Button b;
+            for (int i = 0; i < unit.SkillManagers.Count; i++)
+            {
+                g = GameObject.Instantiate(unitSkillButtonPrefab, _selectedUnitActionButtonsParent);
+                t = g.transform;
+                b = g.GetComponent<Button>();
+                unit.SkillManagers[i].SetButton(b);
+                t.Find("Text").GetComponent<Text>().text = unit.SkillManagers[i].skill.skillName;
+                _AddUnitSkillButtonListener(b, i);
             }
         }
+
+    }
+    private void _AddUnitSkillButtonListener(Button b, int i)
+    {
+        b.onClick.AddListener(() => _selectedUnit.TriggerSkill(i));
     }
 
     private void _ShowSelectedUnitMenu(bool show)
@@ -200,9 +257,9 @@ public class UIManager : MonoBehaviour
         buildingMenu.gameObject.SetActive(!show);
     }
 
-    private void _OnHoverBuildingButton(CustomEventData data)
+    private void _OnHoverBuildingButton(object data)
     {
-        SetInfoPanel(data.unitData);
+        SetInfoPanel((UnitData)data);
         ShowInfoPanel(true);
     }
 

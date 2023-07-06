@@ -9,7 +9,7 @@ public class BuildingManager : UnitManager
 
     private Building _building;
     private int _nCollisions = 0;
-
+    public AudioSource ambientSource;
     public override Unit Unit
     {
         get { return _building; }
@@ -35,6 +35,7 @@ public class BuildingManager : UnitManager
 
     private void OnTriggerExit(Collider other)
     {
+
         if (other.CompareTag("Terrain")) return;
         _nCollisions--;
         CheckPlacement();

@@ -1,16 +1,17 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
+using System.Collections.Generic;
+
+[System.Serializable]
+public class TypedEvent : UnityEvent<object> { }
 
 public class EventManager : MonoBehaviour
 {
-    //used as a message passing interface that removes the need to entangle scripts
-    private Dictionary<string, UnityEvent> _events;
-    private static EventManager _eventManager;
-    private Dictionary<string, CustomEvent> _typedEvents;
 
-    //only one instance of the event manager must be active at any given time
+    private Dictionary<string, UnityEvent> _events;
+    private Dictionary<string, TypedEvent> _typedEvents;
+    private static EventManager _eventManager;
+
     public static EventManager instance
     {
         get
@@ -29,28 +30,41 @@ public class EventManager : MonoBehaviour
         }
     }
 
-    //initializes event dictionaries, associating a name (string) to each event
     void Init()
     {
         if (_events == null)
         {
             _events = new Dictionary<string, UnityEvent>();
-            _typedEvents = new Dictionary<string, CustomEvent>();
+            _typedEvents = new Dictionary<string, TypedEvent>();
         }
     }
 
     public static void AddListener(string eventName, UnityAction listener)
     {
         UnityEvent evt = null;
-        if (instance._events.TryGetValue(eventName, out evt))//if event already exists in the dictionary
+        if (instance._events.TryGetValue(eventName, out evt))
         {
-            evt.AddListener(listener);//adds listener to event
+            evt.AddListener(listener);
         }
-        else//if event is not on dictionary
+        else
         {
-            evt = new UnityEvent();//creates new event
-            evt.AddListener(listener);//adds its listener
-            instance._events.Add(eventName, evt);//adds string-key pair to dictionary
+            evt = new UnityEvent();
+            evt.AddListener(listener);
+            instance._events.Add(eventName, evt);
+        }
+    }
+    public static void AddListener(string eventName, UnityAction<object> listener)
+    {
+        TypedEvent evt = null;
+        if (instance._typedEvents.TryGetValue(eventName, out evt))
+        {
+            evt.AddListener(listener);
+        }
+        else
+        {
+            evt = new TypedEvent();
+            evt.AddListener(listener);
+            instance._typedEvents.Add(eventName, evt);
         }
     }
 
@@ -61,6 +75,13 @@ public class EventManager : MonoBehaviour
         if (instance._events.TryGetValue(eventName, out evt))
             evt.RemoveListener(listener);
     }
+    public static void RemoveListener(string eventName, UnityAction<object> listener)
+    {
+        if (_eventManager == null) return;
+        TypedEvent evt = null;
+        if (instance._typedEvents.TryGetValue(eventName, out evt))
+            evt.RemoveListener(listener);
+    }
 
     public static void TriggerEvent(string eventName)
     {
@@ -68,54 +89,10 @@ public class EventManager : MonoBehaviour
         if (instance._events.TryGetValue(eventName, out evt))
             evt.Invoke();
     }
-
-    //adds custom event to dictionary, same as AddListener, but with custom event data type
-    public static void AddTypedListener(string eventName, UnityAction<CustomEventData> listener)
+    public static void TriggerEvent(string eventName, object data)
     {
-        CustomEvent evt = null;
-        if (instance._typedEvents.TryGetValue(eventName, out evt))
-        {
-            evt.AddListener(listener);
-        }
-        else
-        {
-            evt = new CustomEvent();
-            evt.AddListener(listener);
-            instance._typedEvents.Add(eventName, evt);
-        }
-    }
-
-    public static void RemoveTypedListener(string eventName, UnityAction<CustomEventData> listener)
-    {
-        if (_eventManager == null) return;
-        CustomEvent evt = null;
-        if (instance._typedEvents.TryGetValue(eventName, out evt))
-            evt.RemoveListener(listener);
-    }
-
-    public static void TriggerTypedEvent(string eventName, CustomEventData data)
-    {
-        CustomEvent evt = null;
+        TypedEvent evt = null;
         if (instance._typedEvents.TryGetValue(eventName, out evt))
             evt.Invoke(data);
     }
 }
-public class CustomEventData
-{
-    public UnitData unitData;
-    public Unit unit;
-
-    public CustomEventData(UnitData unitData)
-    {
-        this.unitData = unitData;
-        this.unit = null;
-    }
-    public CustomEventData(Unit unit)
-    {
-        this.unitData = null;
-        this.unit = unit;
-    }
-}
-
-[System.Serializable]
-public class CustomEvent : UnityEvent<CustomEventData> { }

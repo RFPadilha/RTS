@@ -13,6 +13,9 @@ public class UnitManager : MonoBehaviour
     public GameObject selectionCircle;
     private Transform _canvas;
     private GameObject _healthbar;
+    public GameObject fov;
+
+    public AudioSource contextualSource;
 
     private void Awake()
     {
@@ -20,10 +23,7 @@ public class UnitManager : MonoBehaviour
     }
     private void OnMouseDown()
     {
-        if(IsActive())
-        Select(true,
-                Input.GetKey(KeyCode.LeftShift) ||
-                Input.GetKey(KeyCode.RightShift));
+        if(IsActive()) Select( true, Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
     }
 
     public void Initialize(Unit unit)
@@ -41,7 +41,18 @@ public class UnitManager : MonoBehaviour
         if (Globals.SELECTED_UNITS.Contains(this)) return;
         Globals.SELECTED_UNITS.Add(this);
         selectionCircle.SetActive(true);
-        EventManager.TriggerTypedEvent("SelectUnit", new CustomEventData(Unit));
+
+        if (_healthbar == null)
+        {
+            _healthbar = GameObject.Instantiate(Resources.Load("Prefabs/UI/Healthbar")) as GameObject;
+            _healthbar.transform.SetParent(_canvas);
+            Healthbar h = _healthbar.GetComponent<Healthbar>(); 
+            Rect boundingBox = Utils.GetBoundingBoxOnScreen(transform.Find("Mesh").GetComponent<Renderer>().bounds, Camera.main);
+            h.Initialize(transform, boundingBox.height);
+            h.SetPosition();
+        }
+        EventManager.TriggerEvent("SelectUnit", Unit);
+        contextualSource.PlayOneShot(Unit.Data.onSelectSound);
     }
 
     public void Select() { Select(false, false); }
@@ -78,6 +89,11 @@ public class UnitManager : MonoBehaviour
         selectionCircle.SetActive(false);
         Destroy(_healthbar);
         _healthbar = null;
-        EventManager.TriggerTypedEvent("DeselectUnit", new CustomEventData(Unit));
+        EventManager.TriggerEvent("DeselectUnit", Unit);
+    }
+
+    public void EnableFOV()
+    {
+        fov.SetActive(true);
     }
 }

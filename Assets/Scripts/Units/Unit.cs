@@ -10,11 +10,13 @@ public class Unit
     protected string _uid;
     protected int _level;
     protected List<ResourceValue> _production;
+    protected List<SkillManager> _skillManagers;
 
     public Unit(UnitData data) : this(data, new List<ResourceValue>() { }) { }
 
     public Unit(UnitData data, List<ResourceValue> production)
     {
+        //Data-----------------------------------------------
         _data = data;
         _currentHealth = data.healthpoints;
 
@@ -24,6 +26,18 @@ public class Unit
         _uid = System.Guid.NewGuid().ToString();
         _level = 1;
         _production = production;
+
+        //SkillManager------------------------------------
+        _skillManagers = new List<SkillManager>();
+        SkillManager sm;
+        foreach (SkillData skill in _data.skills)
+        {
+            sm = g.AddComponent<SkillManager>();
+            sm.Initialize(skill, g);
+            _skillManagers.Add(sm);
+        }
+        //use the data to set the FOV size----------------
+        _transform.Find("FOV").transform.localScale = new Vector3(data.fieldOfView, data.fieldOfView, 0f);
     }
 
     public void SetPosition(Vector3 position)
@@ -42,6 +56,8 @@ public class Unit
         {
             Globals.GAME_RESOURCES[resource.code].AddAmount(-resource.amount);
         }
+        // enable FOV when unit is placed
+        _transform.GetComponent<UnitManager>().EnableFOV();
     }
 
     public bool CanBuy()
@@ -59,8 +75,13 @@ public class Unit
         foreach (ResourceValue resource in _production)
             Globals.GAME_RESOURCES[resource.code].AddAmount(resource.amount);
     }
+    public void TriggerSkill(int index, GameObject target = null)
+    {
+        _skillManagers[index].Trigger(target);
+    }
 
-
+    // ...
+    public List<SkillManager> SkillManagers { get => _skillManagers; }
     public UnitData Data { get => _data; }
     public string Code { get => _data.code; }
     public Transform Transform { get => _transform; }

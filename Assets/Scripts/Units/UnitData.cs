@@ -11,6 +11,10 @@ public class UnitData : ScriptableObject
     public string description;
     public GameObject prefab;
     public List<ResourceValue> cost;
+    public List<SkillData> skills = new List<SkillData>();
+    public float fieldOfView;
+    [Header("General Sounds")]
+    public AudioClip onSelectSound;
 
     public bool CanBuy()
     {

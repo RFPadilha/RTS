@@ -9,9 +9,24 @@ public class BuildingPlacer : MonoBehaviour
     private Ray _ray;
     private RaycastHit _raycastHit;
     private Vector3 _lastPlacementPosition;
+    GameManager gameManager;
+
+    private void Start()
+    {
+        gameManager = FindObjectOfType<GameManager>();
+        // instantiate headquarters at the beginning of the game
+        _placedBuilding = new Building(gameManager.gameGlobalParameters.initialBuilding);
+        _placedBuilding.SetPosition(gameManager.startPosition);
+        // link the data into the manager
+        _placedBuilding.Transform.GetComponent<BuildingManager>().Initialize(_placedBuilding);
+        _PlaceBuilding();
+        // make sure we have no building selected when the player starts to play
+        _CancelPlacedBuilding();
+    }
 
     void Update()
     {
+        if (GameManager.instance.gameIsPaused) return;
         if (_placedBuilding != null)
         {
             if (Input.GetKeyUp(KeyCode.Escape))
@@ -33,6 +48,7 @@ public class BuildingPlacer : MonoBehaviour
             if (_placedBuilding.HasValidPlacement && Input.GetMouseButtonUp(0) && !EventSystem.current.IsPointerOverGameObject())
             {
                 _PlaceBuilding();
+                EventManager.TriggerEvent("PlaySoundByName", "onBuildingPlacedSound");
             }
 
         }
@@ -64,11 +80,21 @@ public class BuildingPlacer : MonoBehaviour
     {
         _placedBuilding.Place();
         // keep on building the same building type if there are enough resources
-        if (_placedBuilding.CanBuy()) _PreparePlacedBuilding(_placedBuilding.DataIndex);
-        else _placedBuilding = null;
+        if (_placedBuilding.CanBuy())
+        {
+            _PreparePlacedBuilding(_placedBuilding.DataIndex);
+        }
+        else
+        {
+            EventManager.TriggerEvent("PlaceBuildingOff");
+            _placedBuilding = null; 
+        }
 
         EventManager.TriggerEvent("UpdateResourceTexts");
         EventManager.TriggerEvent("CheckBuildingButtons");
+
+        // update the dynamic nav mesh
+        Globals.UpdateNavMeshSurface();
     }
     public void SelectPlacedBuilding(int buildingDataIndex)
     {
